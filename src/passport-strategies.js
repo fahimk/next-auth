@@ -285,7 +285,9 @@ module.exports = ({
   // Add routes for each provider
   providers.forEach(({
     providerName,
-    providerOptions
+    Strategy,
+    strategyOptions,
+    getProfile
   }) => {
     // Route to start sign in
     expressApp.get(`${pathPrefix}/oauth/${providerName.toLowerCase()}`, function(req,res,next){
