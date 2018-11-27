@@ -5,70 +5,11 @@
 
 const passport = require('passport')
 
-module.exports = ({
-  expressApp = null, // Express Server
-  pathPrefix = '/auth', // URL base path for authentication routes
-  providers = [],
-  serverUrl = null,
-  functions = {
-    find: ({
-      id,
-      email,
-      emailToken,
-      provider
-    } = {}) => {},
-    update: (user, profile) => {},
-    insert: (user, profile) => {},
-    serialize: (user) => {},
-    deserialize: (id) => {}
-  }
-} = {}) => {
-  if (expressApp === null) {
-    throw new Error('expressApp must be an instance of an express server')
-  }
-
-  if (typeof(functions) !== 'object') {
-    throw new Error('functions must be a an object')
-  }
-
-  /*
-   * Return functions ID property from a functions object
-   */
-  passport.serializeUser((user, next) => {
-    functions.serialize(user)
-    .then(id => {
-      next(null, id)
-    })
-    .catch(err => {
-      next(err, false)
-    })
-  })
-
-  /*
-   * Return functions from a functions ID
-   */
-  passport.deserializeUser((id, next) => {
-    functions.deserialize(id)
-    .then(user => {
-      if (!user) return next(null, false)
-      next(null, user)
-    })
-    .catch(err => {
-      next(err, false)
-    })
-  })
-
-  // Define a Passport strategy for provider
-  providers.forEach(({
-    providerName,
+function initializePassport(providerName,
     Strategy,
     strategyOptions,
-    getProfile
-  }) => {
-
-    strategyOptions.callbackURL = (strategyOptions.callbackURL || (serverUrl || '') + `${pathPrefix}/oauth/${providerName.toLowerCase()}/callback`)
-    strategyOptions.passReqToCallback = true
-
+    getProfile,
+    functions) {
     passport.use(new Strategy(strategyOptions, (req, accessToken, refreshToken, _profile, next) => {
 
       try {
@@ -265,6 +206,76 @@ module.exports = ({
       }
 
     }))
+}
+
+module.exports = ({
+  expressApp = null, // Express Server
+  pathPrefix = '/auth', // URL base path for authentication routes
+  providers = [],
+  serverUrl = null,
+  functions = {
+    find: ({
+      id,
+      email,
+      emailToken,
+      provider
+    } = {}) => {},
+    update: (user, profile) => {},
+    insert: (user, profile) => {},
+    serialize: (user) => {},
+    deserialize: (id) => {}
+  }
+} = {}) => {
+  if (expressApp === null) {
+    throw new Error('expressApp must be an instance of an express server')
+  }
+
+  if (typeof(functions) !== 'object') {
+    throw new Error('functions must be a an object')
+  }
+
+  /*
+   * Return functions ID property from a functions object
+   */
+  passport.serializeUser((user, next) => {
+    functions.serialize(user)
+    .then(id => {
+      next(null, id)
+    })
+    .catch(err => {
+      next(err, false)
+    })
+  })
+
+  /*
+   * Return functions from a functions ID
+   */
+  passport.deserializeUser((id, next) => {
+    functions.deserialize(id)
+    .then(user => {
+      if (!user) return next(null, false)
+      next(null, user)
+    })
+    .catch(err => {
+      next(err, false)
+    })
+  })
+
+  // Define a Passport strategy for provider
+  providers.forEach(({
+    providerName,
+    Strategy,
+    strategyOptions,
+    getProfile
+  }) => {
+
+    strategyOptions.callbackURL = (strategyOptions.callbackURL || (serverUrl || '') + `${pathPrefix}/oauth/${providerName.toLowerCase()}/callback`)
+    strategyOptions.passReqToCallback = true
+    initializePassport(providerName,
+        Strategy,
+        strategyOptions,
+        getProfile,
+        functions);
   })
 
   // Initialise Passport
@@ -278,11 +289,22 @@ module.exports = ({
   }) => {
     // Route to start sign in
     expressApp.get(`${pathPrefix}/oauth/${providerName.toLowerCase()}`, function(req,res,next){
+        if(req.query.override) {
+            strategyOptions.callbackURL = (strategyOptions.callbackURL || (serverUrl || '') + `${pathPrefix}/oauth/${providerName.toLowerCase()}/callback`)
+            strategyOptions.passReqToCallback = true
+            strategyOptions.scope = req.query.scope
+            strategyOptions.profileUrl = req.query.profileUrl
+            initializePassport(providerName,
+                Strategy,
+                strategyOptions,
+                getProfile,
+                functions);
+        }
         passport.authenticate(
-            providerName, { scope : req.query.scope, profileUrl: req.query.profileUrl }
+            providerName, providerOptions
         )(req,res,next);
     })
-    
+
     // Route to call back to after signing in
     expressApp.get(`${pathPrefix}/oauth/${providerName.toLowerCase()}/callback`,
       passport.authenticate(providerName, {
