@@ -285,6 +285,7 @@ module.exports = ({
   // Add routes for each provider
   providers.forEach(({
     providerName,
+    providerOptions,
     Strategy,
     strategyOptions,
     getProfile
